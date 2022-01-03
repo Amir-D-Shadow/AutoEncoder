@@ -3,7 +3,7 @@ from einops.layers.torch import Rearrange,Reduce
 from torch import nn
 import torch
 import numpy as np
-from data_utils import *
+#from data_utils import *
 
 def get_sinusoid_pos_encoding(n_pos,d_hid):
 
@@ -44,13 +44,14 @@ class PatchEmbedding(nn.Module):
 
         self.patch_size = patch_size
 
-        #projection layer (N,C_in,H_in,W_in) -- > (N,M,C_out) M = H_out*W_out
+        #projection layer (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w
         self.proj_layer = nn.Sequential(nn.Conv2d(in_channels = in_channels,out_channels = out_channels,kernel_size=self.patch_size,stride=self.patch_size),
-                                        Rearrange("N C H W -> N (H W) C")
+                                        nn.LeakyReLU(),
+                                        Rearrange("n c h w -> n (h w) c")
                                         )
 
         #position encoding 
-        self.pos_enc_tensor = get_sinusoid_pos_encoding(h*w,out_channels) #(1,H*W,C)
+        self.pos_enc_tensor = get_sinusoid_pos_encoding(h*w,out_channels) #(1,h*w,C)
     
     def forward(self,x):
 
@@ -59,18 +60,71 @@ class PatchEmbedding(nn.Module):
         """
         N,_,_,_ = x.shape
 
-        # projection : (N,C_in,H_in,W_in) -- > (N,M,C_out) M = H_out*W_out
+        # projection : (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w
         x = self.proj_layer(x)
 
-        #position encoding (1,H*W,C) --> (N,H*W,C)
+        #position encoding (1,h*w,C) --> (N,h*w,C)
         pos_enc_expand = self.pos_enc_tensor.expand(N,-1,-1).type_as(x).to(x.device).clone().detach()
 
         x = x + pos_enc_expand
 
-        return x
+        return x # (N,h*w,C)
 
 
+class MultiHeadSelfAttention(nn.Module):
 
+    def __init__(self,in_dim,emb_size=768,num_heads=12,drop_rate=0.5):
+
+        """
+        params in_dim : int , input dimension
+        params emb_size : int , embedding size
+        params heads : int , num of heads for attention
+        params drop_rate : float , probability to be dropped in dropout layer
+        """
+
+        super(MultiHeadSelfAttention,self).__init__()
+
+        self.emb_size = emb_size
+        self.num_of_heads = num_heads
+        
+        self.qkv_encoding = nn.Linear(in_features = in_dim,out_features = emb_size*3)
+        self.softmax_att = nn.Softmax(dim=-1)
+        self.att_drop = nn.Dropout(p=drop_rate)
+        self.att_resize = Rearrange("n h m d -> n m (h d)")
+        self.proj_layer = nn.Linear(in_features = emb_size,out_features = emb_size)
+
+    def forward(self,x):
+
+        """
+        x : Tensor , (N,M,C) ,  M = h*w (number of patches)
+        """
+
+        qkv = self.qkv_encoding(x) # (N,M,3*H*D)
+
+        #o : qkv (num of operational tensor), n : batch size , m : num of patches , d : hidden dims
+        qkv = rearrange(qkv,"n m (h d o) -> (o) n h m d",h=self.num_of_heads,o=3) # (3,N,H,M,D)
+
+        #Notice that H*D = emb_size
+        query = qkv[0] # (N,H,M,D) <==> (N,H,Q,D)
+        key = qkv[1]   # (N,H,M,D) <==> (N,H,K,D)
+        value = qkv[2] # (N,H,M,D) <==> (N,H,V,D)
+
+        #scaling 
+        scale = (self.emb_size)**(0.5)
+        query = query / scale
+
+        #attention process 
+        att_weight = torch.einsum("nhqd,nhkd->nhqk",query,key) #(N,H,Q,K)
+        att_weight = self.softmax_att(att_weight) #(N,H,Q,K)
+        att_weight = self.att_drop(att_weight)    #(N,H,Q,K)
+
+        att = torch.einsum("nhqv,nhvd->nhqd",att_weight,value) # (N,H,M,D) <==> (N,H,Q,D)
+        att = self.att_resize(att) # (N,M,H*D)
+        att = self.proj_layer(att) # (N,M,H*D)
+
+        #return tensor (N,M,H*D)
+        return att
+        
 
 if __name__ == "__main__":
 
@@ -79,11 +133,10 @@ if __name__ == "__main__":
 
     print(len(angular_vec_k(1)))
 
-    t = get_sinusoid_pos_encoding(224,768)
+    t = get_sinusoid_pos_encoding(256*256,1)#get_sinusoid_pos_encoding(224,768)
 
     data = torch.randn(16,3,224,224)
-    t = PatchEmbedding(3,768,img_size=(224,224))
-
-    a = t(data)
-
+    
+    step1 = PatchEmbedding(3,768,img_size=(224,224))(data)
+    step2 = MultiHeadSelfAttention(in_dim=768,emb_size=768,num_heads=12)(step1)
     
