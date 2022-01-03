@@ -126,6 +126,29 @@ class MultiHeadSelfAttention(nn.Module):
         return att
         
 
+class MLP(nn.Module):
+
+    def __init__(self,in_dim,hidden_dim,out_dim,drop_rate=0.5):
+
+        """
+        params expansion : int , usually scaled input dim produce hidden dim
+        """
+        self.fc1 = nn.Linear(in_features=in_dim, out_features=hidden_dim)
+        self.act_fn = nn.GELU()
+        self.drop1 = nn.Dropout(p=drop_rate)
+        self.fc2 = nn.Linear(in_features=hidden_dim, out_features=out_dim)
+
+    def forward(self,x):
+
+        x = self.fc1(x)
+        x = self.act_fn(x)
+        x = self.drop1(x)
+        x = self.fc2(x)
+
+        return x
+
+    
+        
 if __name__ == "__main__":
 
     #experimental code
