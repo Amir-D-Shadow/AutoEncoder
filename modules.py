@@ -3,7 +3,7 @@ from einops.layers.torch import Rearrange,Reduce
 from torch import nn
 import torch
 import numpy as np
-#from data_utils import *
+import os
 
 def get_sinusoid_pos_encoding(n_pos,d_hid):
 
@@ -44,7 +44,7 @@ class PatchEmbedding(nn.Module):
 
         self.patch_size = patch_size
 
-        #projection layer (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w
+        #projection layer (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w , C_out = emb_size
         self.proj_layer = nn.Sequential(nn.Conv2d(in_channels = in_channels,out_channels = out_channels,kernel_size=self.patch_size,stride=self.patch_size),
                                         nn.LeakyReLU(),
                                         Rearrange("n c h w -> n (h w) c")
@@ -63,12 +63,12 @@ class PatchEmbedding(nn.Module):
         # projection : (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w
         x = self.proj_layer(x)
 
-        #position encoding (1,h*w,C) --> (N,h*w,C)
+        #position encoding (1,h*w,C) --> (N,h*w,C)  C = emb_size
         pos_enc_expand = self.pos_enc_tensor.expand(N,-1,-1).type_as(x).to(x.device).clone().detach()
 
         x = x + pos_enc_expand
 
-        return x # (N,h*w,C)
+        return x # (N,h*w,C), C = emb_size
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -122,7 +122,7 @@ class MultiHeadSelfAttention(nn.Module):
         att = self.att_resize(att) # (N,M,H*D)
         att = self.proj_layer(att) # (N,M,H*D)
 
-        #return tensor (N,M,H*D)
+        #return tensor (N,M,H*D) , H*D = emb_size
         return att
         
 
@@ -133,6 +133,9 @@ class MLP(nn.Module):
         """
         params expansion : int , usually scaled input dim produce hidden dim
         """
+
+        super(MLP,self).__init__()
+        
         self.fc1 = nn.Linear(in_features=in_dim, out_features=hidden_dim)
         self.act_fn = nn.GELU()
         self.drop1 = nn.Dropout(p=drop_rate)
@@ -146,6 +149,48 @@ class MLP(nn.Module):
         x = self.fc2(x)
 
         return x
+
+
+class Block(nn.Module):
+
+    def __init__(self,in_dim,out_dim,emb_size=768,num_heads=12,drop_rate=0.5):
+
+        super(Block,self).__init__()
+
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.emb_size = emb_size
+        self.num_heads = num_heads
+        self.drop_rate = drop_rate
+
+        self.norm_att = nn.Sequential(nn.LayerNorm(self.emb_size),
+                                      MultiHeadSelfAttention(in_dim=self.in_dim,emb_size=self.emb_size,num_heads=self.num_heads,drop_rate=self.drop_rate),
+                                      nn.Dropout(p=self.drop_rate)
+                                      )
+        
+        self.norm_feedforward = nn.Sequential(nn.LayerNorm(self.emb_size),
+                                              MLP(in_dim=self.emb_size,hidden_dim=int(self.emb_size*4),out_dim=self.out_dim,drop_rate=self.drop_rate),
+                                              nn.Dropout(p=self.drop_rate)
+                                              )
+        
+    def forward(self,x):
+
+        """
+        x : Tensor , embedded input patches with shape (N,h*w,C) , C = emb_size
+        """
+
+        res = x #(N,h*w,C)
+
+        carrier_1 = self.norm_att(x) #(N,M,H*D)
+        carrier_1 = carrier_1 + res  #(N,M,H*D)
+
+        res = carrier_1
+
+        carrier_2 = self.norm_feedforward(carrier_1) #(N,M,H*D)
+        carrier_2 = carrier_2 + res                  #(N,M,H*D)
+
+        return carrier_2
+
 
     
         
@@ -162,4 +207,6 @@ if __name__ == "__main__":
     
     step1 = PatchEmbedding(3,768,img_size=(224,224))(data)
     step2 = MultiHeadSelfAttention(in_dim=768,emb_size=768,num_heads=12)(step1)
+
+    step3 = Block(in_dim=768,out_dim=768,emb_size=768,num_heads=12)(step1)
     
