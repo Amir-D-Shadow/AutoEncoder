@@ -60,7 +60,7 @@ class PatchEmbedding(nn.Module):
         """
         N,_,_,_ = x.shape
 
-        # projection : (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w
+        # projection : (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w = num of patches
         x = self.proj_layer(x)
 
         #position encoding (1,h*w,C) --> (N,h*w,C)  C = emb_size

@@ -88,7 +88,7 @@ def MAEDataLoader(img_dir, global_batch_size=4096,pos_enc=False,resize_shape = (
         idx = idx + 1
 
         #return input_batch , gt_batch  (N,C*,H,W) : N = global_batch_size dtype = torch.Tensor
-        yield (torch.stack(input_batch,dim=0), torch.stack(gt_batch,dim=0) )#np.stack(input_batch,axis=0)
+        yield (torch.stack(input_batch,dim=0).type(torch.float32), torch.stack(gt_batch,dim=0).type(torch.float32) )#np.stack(input_batch,axis=0)
 
 
 
