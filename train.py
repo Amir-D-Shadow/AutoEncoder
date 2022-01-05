@@ -288,6 +288,7 @@ if __name__ == "__main__":
     total_epochs = 50
     global_batch = 160
     #batch_size = 64
+    load_model = True
 
     device = torch.device("cuda:6")
     device_ids = [6,7,8,9]
@@ -308,6 +309,10 @@ if __name__ == "__main__":
                         img_size=(128,128)
                         )
 
+    if load_model:
+        
+        enc_model.load_state_dict( torch.load(f"{save_weight_path}/Encoder.pt") )
+        
     enc_model = nn.DataParallel(enc_model,device_ids=device_ids)
     enc_model.to(device)
     
@@ -316,6 +321,10 @@ if __name__ == "__main__":
                           emb_size=768
                           )
 
+    if load_model:
+
+        bn_model.load_state_dict( torch.load(f"{save_weight_path}/BottleNet.pt") )
+        
     bn_model = nn.DataParallel(bn_model,device_ids=device_ids)
     bn_model.to(device)
 
@@ -329,6 +338,10 @@ if __name__ == "__main__":
                         drop_rate=0.5
                         )
 
+    if load_model:
+
+        dec_model.load_state_dict( torch.load(f"{save_weight_path}/Decoder.pt") )
+        
     dec_model = nn.DataParallel(dec_model,device_ids=device_ids)
     dec_model.to(device)
 
