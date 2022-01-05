@@ -50,6 +50,9 @@ class Encoder(nn.Module):
                                       )
                                 )
 
+        self.blocks = nn.ModuleList(self.blocks)
+        
+
     def forward(self,x):
 
         """
@@ -62,8 +65,7 @@ class Encoder(nn.Module):
         #encoding (ViT transformer encoder blocks)
         for i in range(self.num_ViTblk):
 
-            blk = self.blocks[i].cuda(x.device) 
-            enc_out = blk(enc_out) #(N,M,H*D) , H*D = emb_size , M = num of patches
+            enc_out = self.blocks[i](enc_out) #(N,M,H*D) , H*D = emb_size , M = num of patches
 
         #Tensor (N,M,H*D) , H*D = emb_size , M = num of patches
         return enc_out
@@ -146,6 +148,8 @@ class Decoder(nn.Module):
                                       )
                                 )
 
+        self.blocks = nn.ModuleList(self.blocks)
+        
         #output layer
         self.out_layer = nn.Sequential(nn.Linear(in_features = self.out_dim,out_features = self.final_out),
                                        nn.LayerNorm(self.final_out),
@@ -164,8 +168,7 @@ class Decoder(nn.Module):
         #decoding
         for i in range(self.num_ViTblk):
 
-            blk = self.blocks[i].cuda(x.device) 
-            dec_out = blk(dec_out) #(N,M,emb_size), M = num of patches
+            dec_out = self.blocks[i](dec_out) #(N,M,emb_size), M = num of patches
 
         #output
         dec_out = self.out_layer(dec_out)
@@ -184,34 +187,53 @@ def mse2psnr(mse):
     return psnr.astype(np.float32)
 
 
-def train_one_epoch(enc_model,bn_model,dec_model,opt_enc,opt_bn,opt_dec,data_dir,emb_size=768,global_batch_size=256,pos_enc=True,resize_shape = (256,256),input_info = (256,4,256,256)):
+def train_one_epoch(enc_model,bn_model,dec_model,opt_enc,opt_bn,opt_dec,data_dir,emb_size=768,global_batch_size=256,pos_enc=True,resize_shape = (256,256)):
 
     enc_model.train()
     bn_model.train()
     dec_model.train()
 
-    N,C,H,W = input_info
-
-    #keeping 25% , masking 75%
-    h = H//2
-    w = W//2
-    
-    n_vis = h*w
-
     total_loss = []
     
     for input_img,gt_image in MAEDataLoader(img_dir=data_dir,global_batch_size=global_batch_size,pos_enc=pos_enc,resize_shape=resize_shape):
 
+        #set input info: input image size
+        N,C,H,W = input_img.shape
+        input_info = (N,C,H,W)
+        
+        #keeping 25% , masking 75%
+        h = H//2
+        w = W//2
+
+        n_vis = h*w
+
         #get mask : bool (N,C,H,W)
-        mask = RandomMasking(n_vis = n_vis,input_info = input_info)
+        vis = RandomMasking(n_vis = n_vis,input_info = input_info)
+        
+        mask = 1 - vis
+        mask = mask.astype(np.bool_)
+
+        if pos_enc :
+
+            mask = mask[:,:-1,:,:]
+
+        vis = torch.from_numpy(vis)
         mask = torch.from_numpy(mask)
 
         #mask img
-        input_img_vis = input_img[mask].view(N,C,h,w) #(N,C,h,w)
+        input_img_vis = input_img[vis].view(N,C,h,w) #(N,C,h,w)
         input_img_vis = input_img_vis.to(device)
 
-        #masked token 
-        input_img_masked = input_img[~mask].view(N,-1,emb_size) #(N,M,emb_size)
+        #masked token
+        if pos_enc:
+            
+            input_img_masked = input_img[:,:-1,:,:][mask].view(N,-1,emb_size) #(N,M,emb_size)
+
+        else:
+
+            input_img_masked = input_img[mask].view(N,-1,emb_size) #(N,M,emb_size)
+
+        input_img_masked = torch.from_numpy( np.zeros_like( input_img_masked.numpy() ) )
         input_img_masked = input_img_masked.to(device)
 
         #training
@@ -219,7 +241,8 @@ def train_one_epoch(enc_model,bn_model,dec_model,opt_enc,opt_bn,opt_dec,data_dir
         step2 = bn_model(step1,input_img_masked) # out: (N,M,C)
         step3 = dec_model(step2) #out: (N,M,C)
 
-        img_pred = step3.view(N,C,H,W)
+        img_pred = step3.view(N,3,H,W)
+        gt_image = gt_image.to(device)
 
         #calculate loss
         L2_loss = F.mse_loss(img_pred,gt_image)
@@ -328,7 +351,7 @@ if __name__ == "__main__":
                                      opt_dec = opt_dec,
                                      data_dir = data_dir,
                                      emb_size=768,
-                                     global_batch_size=256,
+                                     global_batch_size=global_batch,
                                      pos_enc=True,
                                      resize_shape = (256,256),
                                      input_info = (256,4,256,256))
@@ -340,7 +363,7 @@ if __name__ == "__main__":
         #saving checkpoints
         torch.save(enc_model.state_dict(),f"{save_weight_path}/Encoder.pt")
         torch.save(bn_model.state_dict(),f"{save_weight_path}/BottleNet.pt")
-        torch.save(dec_model.state_dict(),f"{save_weight_path}/BottleNet.pt")
+        torch.save(dec_model.state_dict(),f"{save_weight_path}/Decoder.pt")
 
         #print info
         print("Epoch {epoch_i} : Training MSE : {total_loss}, estimated time : {time.time() - start_time}")

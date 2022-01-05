@@ -46,6 +46,7 @@ class PatchEmbedding(nn.Module):
 
         #projection layer (N,C_in,H_in,W_in) -- > (N,M,C_out) M = h*w , C_out = emb_size
         self.proj_layer = nn.Sequential(nn.Conv2d(in_channels = in_channels,out_channels = out_channels,kernel_size=self.patch_size,stride=self.patch_size),
+                                        nn.BatchNorm2d(num_features = out_channels,track_running_stats = True),
                                         nn.LeakyReLU(),
                                         Rearrange("n c h w -> n (h w) c")
                                         )
