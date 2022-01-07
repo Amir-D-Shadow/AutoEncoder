@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
     #set up
     total_epochs = 50
-    global_batch = 160
+    global_batch = 180
     #batch_size = 64
     load_model = True
 
@@ -378,9 +378,9 @@ if __name__ == "__main__":
         scheduler_enc.step()
 
         #saving checkpoints
-        torch.save(enc_model.state_dict(),f"{save_weight_path}/Encoder.pt")
-        torch.save(bn_model.state_dict(),f"{save_weight_path}/BottleNet.pt")
-        torch.save(dec_model.state_dict(),f"{save_weight_path}/Decoder.pt")
+        torch.save(enc_model.module.state_dict(),f"{save_weight_path}/Encoder.pt")
+        torch.save(bn_model.module.state_dict(),f"{save_weight_path}/BottleNet.pt")
+        torch.save(dec_model.module.state_dict(),f"{save_weight_path}/Decoder.pt")
 
         #print info
         print(f"Epoch {epoch_i+1} : Training MSE : {total_loss}, estimated time : {time.time() - start_time}")
