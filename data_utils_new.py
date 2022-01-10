@@ -50,14 +50,34 @@ def MAEDataLoader(img_dir, global_batch_size=4096,pos_enc=False,resize_shape = (
     count = 0
     input_batch = []
     gt_batch = []
+
+    folder1 = os.listdir(img_dir)
+
+    random.shuffle(folder1)
     
-    for i in os.listdir(img_dir):
+    for i in folder1:
 
-        for j in os.listdir(f"{img_dir}/{i}"):
+        folder2 = os.listdir(f"{img_dir}/{i}")
 
-            for k in os.listdir(f"{img_dir}/{i}/{j}"):
+        random.shuffle(folder2)
 
-                for img_name in os.listdir(f"{img_dir}/{i}/{j}/{k}"):
+        for j in folder2:
+
+            folder3 = os.listdir(f"{img_dir}/{i}/{j}")
+
+            random.shuffle(folder3)
+
+            for k in folder3:
+
+                path = os.listdir(f"{img_dir}/{i}/{j}/{k}")
+
+                random.shuffle(path)
+
+                for img_name in path:
+
+                    if img_name[-3:] == "cfg":
+
+                        continue
 
                     #get image
                     img = Image.open(f"{img_dir}/{i}/{j}/{k}/{img_name}")   #(H,W,C) channel last

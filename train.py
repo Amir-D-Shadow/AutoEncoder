@@ -311,7 +311,7 @@ if __name__ == "__main__":
 
     if load_model:
         
-        enc_model.load_state_dict( torch.load(f"{save_weight_path}/Encoder.pt") )
+        enc_model.load_state_dict( torch.load(f"{save_weight_path}/Encoder.pt",map_location=device) )
         
     enc_model = nn.DataParallel(enc_model,device_ids=device_ids)
     enc_model.to(device)
@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     if load_model:
 
-        bn_model.load_state_dict( torch.load(f"{save_weight_path}/BottleNet.pt") )
+        bn_model.load_state_dict( torch.load(f"{save_weight_path}/BottleNet.pt",map_location=device) )
         
     bn_model = nn.DataParallel(bn_model,device_ids=device_ids)
     bn_model.to(device)
@@ -340,7 +340,7 @@ if __name__ == "__main__":
 
     if load_model:
 
-        dec_model.load_state_dict( torch.load(f"{save_weight_path}/Decoder.pt") )
+        dec_model.load_state_dict( torch.load(f"{save_weight_path}/Decoder.pt",map_location=device) )
         
     dec_model = nn.DataParallel(dec_model,device_ids=device_ids)
     dec_model.to(device)
