@@ -81,10 +81,8 @@ class BottleNeck(nn.Module):
         self.emb_size = emb_size
         self.in_dim = in_dim
 
-        self.enc_to_dec = nn.Sequential(nn.Linear(in_features = self.in_dim,out_features = self.emb_size),
-                                        nn.LayerNorm(self.emb_size),
-                                        nn.GELU()
-                                        )
+        self.enc_to_dec = nn.Linear(in_features = self.in_dim,out_features = self.emb_size)
+
 
     def forward(self,x,masked_token):
 
@@ -151,10 +149,8 @@ class Decoder(nn.Module):
         self.blocks = nn.ModuleList(self.blocks)
         
         #output layer
-        self.out_layer = nn.Sequential(nn.Linear(in_features = self.out_dim,out_features = self.final_out),
-                                       nn.LayerNorm(self.final_out),
-                                       nn.GELU()
-                                       )
+        self.out_layer = nn.Linear(in_features = self.out_dim,out_features = self.final_out)
+ 
 
 
     def forward(self,x):
