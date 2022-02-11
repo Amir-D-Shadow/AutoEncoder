@@ -237,8 +237,9 @@ def train_one_epoch(enc_model,bn_model,dec_model,opt_enc,opt_bn,opt_dec,data_dir
         step2 = bn_model(step1,input_img_masked) # out: (N,M,C)
         step3 = dec_model(step2) #out: (N,M,C)
 
-        img_pred = step3.view(N,3,H,W)
-        gt_image = gt_image.to(device)
+        #img_pred = step3.view(N,3,H,W)
+        img_pred = rearrange(step3,"b (h w) (p1 p2 c) -> b c (h p1) (w p2)",p1=16,p2=16,c=3) #(N,3,H,W)
+        gt_image = gt_image.to(device)   #(N,3,H,W)
 
         #calculate loss
         L2_loss = F.mse_loss(img_pred,gt_image)
@@ -281,13 +282,13 @@ if __name__ == "__main__":
     #training
 
     #set up
-    total_epochs = 50
-    global_batch = 180
+    total_epochs = 10
+    global_batch = 90
     #batch_size = 64
     load_model = True
 
-    device = torch.device("cuda:6")
-    device_ids = [6,7,8,9]
+    device = torch.device("cuda:8")
+    device_ids = [8,9]
 
     data_dir = f"{os.getcwd()}/data"
     save_weight_path = f"{os.getcwd()}/model_weights"
