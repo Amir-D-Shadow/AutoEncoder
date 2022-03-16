@@ -238,7 +238,7 @@ def train_one_epoch(enc_model,bn_model,dec_model,opt_enc,opt_bn,opt_dec,data_dir
         step3 = dec_model(step2) #out: (N,M,C)
 
         #img_pred = step3.view(N,3,H,W)
-        img_pred = rearrange(step3,"b (h w) (p1 p2 c) -> b c (h p1) (w p2)",p1=16,p2=16,c=3) #(N,3,H,W)
+        img_pred = rearrange(step3,"b (h w) (p1 p2 c) -> b c (h p1) (w p2)",h=H//16,p1=16,p2=16,c=3) #(N,3,H,W)
         gt_image = gt_image.to(device)   #(N,3,H,W)
 
         #calculate loss
